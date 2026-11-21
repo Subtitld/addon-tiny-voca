@@ -52,6 +52,7 @@ from tiny_voca_addon import audio, engine, tls, voices
 ADDON_VERSION = __version__
 
 ERR_UNSUPPORTED_VOICE = 'unsupported_voice'
+ERR_UNSUPPORTED_LANGUAGE = 'unsupported_language'
 ERR_BAD_PARAMS = 'bad_params'
 ERR_INTERNAL = 'internal'
 ERR_CANCELLED = 'cancelled'
@@ -209,6 +210,12 @@ def _handle_synthesize(state: _Request, params: dict) -> None:
     voice = voices.BY_ID.get(voice_id)
     if voice is None:
         _emit_error(req_id, ERR_UNSUPPORTED_VOICE, f'unknown voice {voice_id!r}')
+        return
+    language = str(params.get('language') or '').strip().lower().replace('_', '-').split('-', 1)[0]
+    if language and language not in voices.LANGUAGES:
+        _emit_error(req_id, ERR_UNSUPPORTED_LANGUAGE,
+                    f'tiny-voca speaks English only, and this line is in {params.get("language")!r}. '
+                    'Pick another dubbing engine for it.')
         return
     options = _options()
     speed, seed = _speed(params, options), _seed(params)

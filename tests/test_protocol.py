@@ -66,6 +66,14 @@ def test_unknown_voice_and_missing_fields(run, tmp_path):
     assert _terminal(run({'text': 'Hi', 'voice': 'tiny-voca-f2'})[0])['code'] == 'bad_params'
 
 
+def test_other_languages_are_refused_and_english_variants_accepted(run, tmp_path):
+    base = {'text': 'Hi', 'voice': 'tiny-voca-f2', 'output_path': str(tmp_path / 'a.wav')}
+    error = _terminal(run(dict(base, language='pt-BR'))[0])
+    assert error['code'] == 'unsupported_language' and 'English only' in error['message']
+    for tag in ('en', 'en-GB', 'en_US', ''):
+        assert _terminal(run(dict(base, language=tag))[0])['type'] == 'result', tag
+
+
 def test_a_cancelled_request_speaks_nothing(run, tmp_path):
     out = tmp_path / 'a.wav'
     frames, fake = run({'text': 'Hi', 'voice': 'tiny-voca-f2', 'output_path': str(out)}, cancelled=True)
