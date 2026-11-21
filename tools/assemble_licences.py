@@ -148,9 +148,10 @@ def assemble(bundle: Path, out: Path) -> list[tuple[str, str, str]]:
             problems.append(f'{relative}: {component} needs THIRD_PARTY_LICENSES/{notice}, which is not committed')
             continue
         rows.append((relative, component, notice))
-    for component in ('llama.cpp server', 'llama.cpp', 'ggml'):
-        if not any(row[1] == component for row in rows):
-            problems.append(f'the bundle has no {component}')
+    # On Windows llama.cpp and ggml are linked into llama-server.exe; elsewhere
+    # they are libraries beside it. One notice, llama.cpp's MIT, covers all three.
+    if not any(row[1] == 'llama.cpp server' for row in rows):
+        problems.append('the bundle has no llama-server')
     required = ['llama/third_party/cpp-httplib/LICENSE', 'llama/third_party/nlohmann-json/LICENSE.txt',
                 'llama/third_party/miniaudio/LICENSE.txt', 'llama/third_party/stb_image/LICENSE.txt',
                 'llama/third_party/subprocess.h/LICENSE.txt', 'llama/third_party/hash/LICENSE.txt',
