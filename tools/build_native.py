@@ -10,10 +10,11 @@ phonemes with the model's own `tts` template, a port of tiny-voca's phonemizer
 a pinned commit, builds `llama-server` with its libraries, fetches the pinned
 model files, and collects:
 
-- build/assets/llama/: llama-server and the libraries it loads (llama, mtmd,
-  ggml and, on Linux and Windows, one ggml CPU backend per x86-64 instruction
-  set, of which ggml loads the best the processor runs). Each finds the others
-  in its own folder.
+- build/assets/llama/: llama-server and, on Linux and macOS, the libraries it
+  loads (llama, mtmd, ggml and, on Linux, one ggml CPU backend per x86-64
+  instruction set, of which ggml loads the best the processor runs), each
+  finding the others in its own folder. On Windows, one llama-server.exe with
+  all of it linked in (see WINDOWS_OPTIONS).
 - build/assets/models/: tiny-voca's two GGUF files, checked by sha256.
 - build/assets/native.json: where it all came from, and each file's SHA-256.
 - build/licences/llama/: the licences of what is compiled in.
@@ -83,8 +84,17 @@ CMAKE_OPTIONS = [
 ]
 LINUX_OPTIONS = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DGGML_BACKEND_DL=ON', '-DGGML_CPU_ALL_VARIANTS=ON',
                  '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON', '-DCMAKE_INSTALL_RPATH=$ORIGIN']
-WINDOWS_OPTIONS = ['-A', 'x64', '-DGGML_BACKEND_DL=ON', '-DGGML_CPU_ALL_VARIANTS=ON',
-                   '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded', '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW']
+# Windows: one llama-server.exe with llama.cpp and ggml linked in. Built as
+# DLLs with the C runtime linked statically, each DLL would have its own heap,
+# and llama.cpp's libraries pass C++ strings and vectors between each other: the
+# server aborts as it loads the model (0xC0000409). One executable has one
+# heap. Without separate backend DLLs, ggml's CPU code is built once, for
+# SSE4.2, which every x86-64 PC Windows runs on has: tiny-voca is small enough
+# that it is still far faster than real time.
+WINDOWS_OPTIONS = ['-A', 'x64', '-DBUILD_SHARED_LIBS=OFF', '-DGGML_BACKEND_DL=OFF', '-DGGML_CPU_ALL_VARIANTS=OFF',
+                   '-DGGML_AVX=OFF', '-DGGML_AVX2=OFF', '-DGGML_FMA=OFF', '-DGGML_F16C=OFF', '-DGGML_BMI2=OFF',
+                   '-DGGML_AVX512=OFF', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
+                   '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW']
 MACOS_OPTIONS = ['-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_OSX_ARCHITECTURES=arm64',
                  '-DCMAKE_OSX_DEPLOYMENT_TARGET=13.3', '-DGGML_BLAS=OFF',
                  '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON', '-DCMAKE_INSTALL_RPATH=@loader_path']
