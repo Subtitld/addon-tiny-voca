@@ -190,8 +190,15 @@ def soname(lib):
     return m.group(1) if m else lib.name
 
 
+def install_name(lib):
+    """macOS: the name a dylib is loaded by (its LC_ID_DYLIB), without the @rpath/ part."""
+    lines = output(['otool', '-D', lib]).strip().splitlines()
+    return lines[-1].rsplit('/', 1)[-1] if len(lines) > 1 else lib.name
+
+
 def collect(platform, built):
-    """llama-server and every library beside it, Linux ones under the name they are loaded by."""
+    """llama-server and every library beside it, each under the name it is loaded by
+    (Linux: its SONAME; macOS: its install name)."""
     fresh(RUNTIME)
     shutil.copyfile(built / SERVER[platform], RUNTIME / SERVER[platform])
     os.chmod(RUNTIME / SERVER[platform], 0o755)
@@ -199,7 +206,7 @@ def collect(platform, built):
     for lib in sorted(built.glob(pattern)):
         if lib.is_symlink():
             continue
-        name = soname(lib) if platform == 'linux' else lib.name
+        name = {'linux': soname, 'macos': install_name}.get(platform, lambda path: path.name)(lib)
         shutil.copyfile(lib, RUNTIME / name)
 
 
