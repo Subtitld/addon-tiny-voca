@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subtitld-addon-tiny-voca"
+version = "26.11.1"
+description = "Subtitld add-on: lightweight English text-to-speech with tiny-voca, run by llama.cpp"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Subtitld", email = "jbopen@gmail.com" }]
+requires-python = ">=3.10"
+
+# Speech is llama.cpp's server, built with the model by tools/build_native.py
+# into build/assets/ and driven over HTTP on 127.0.0.1; nothing else is needed.
+dependencies = []
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.10"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+tiny-voca-addon = "tiny_voca_addon.__main__:main"
+
+[tool.setuptools]
+packages = ["tiny_voca_addon"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = []

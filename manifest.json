@@ -1,0 +1,76 @@
+{
+  "manifest_version": 1,
+  "id": "tiny-voca",
+  "version": "26.11.1",
+  "display_name": "tiny-voca (offline, lightweight English)",
+  "summary": "tiny-voca, a 4.5M-parameter model, speaks American English at 24 kHz in two voices, a woman and a man, dozens of times faster than real time on a CPU. Numbers, dates, times and money are read out as words. The model is part of the add-on: nothing to download. No voice cloning.",
+  "author": "Subtitld",
+  "homepage": "https://github.com/Subtitld/addon-tiny-voca",
+  "license": "Apache-2.0 (add-on, tiny-voca weights); MIT (llama.cpp and ggml, cpp-httplib, nlohmann/json); MIT-0 or public domain (miniaudio, stb_image); Unlicense (subprocess.h)",
+  "executable": "bin/tiny-voca-addon",
+  "protocol": 1,
+  "startup_timeout_sec": 30,
+  "platforms": [
+    "linux",
+    "macos",
+    "windows"
+  ],
+  "tasks": [
+    "tts.synthesize"
+  ],
+  "compute": "cpu",
+  "voice_clone": false,
+  "languages": [
+    "en"
+  ],
+  "voices": [
+    {
+      "id": "tiny-voca-f2",
+      "language": "en",
+      "display_name": "Woman (American English)"
+    },
+    {
+      "id": "tiny-voca-m2",
+      "language": "en",
+      "display_name": "Man (American English)"
+    }
+  ],
+  "models": [
+    {
+      "id": "tiny-voca",
+      "display_name": "tiny-voca (4.5M)",
+      "repo": "ggml-org/tiny-voca-GGUF",
+      "revision": "8a785351a6dac0b9168bc14bc5de635a98a7b809",
+      "size_mb": 25,
+      "license": "Apache-2.0",
+      "bundled": true,
+      "default": true
+    }
+  ],
+  "disk_required_mb": 120,
+  "ram_required_mb": 256,
+  "config_schema": {
+    "fields": [
+      {
+        "key": "speed",
+        "type": "number",
+        "label": "Speed",
+        "default": 1.0,
+        "min": 0.5,
+        "max": 2.0,
+        "step": 0.05,
+        "help": "The pace of the voices. 1.0 is the model's own; a speaker's Rate in Subtitld scales it further."
+      },
+      {
+        "key": "threads",
+        "type": "int",
+        "label": "CPU threads",
+        "default": 0,
+        "min": 0,
+        "max": 64,
+        "step": 1,
+        "help": "0 uses up to four threads, which is plenty for a model this small."
+      }
+    ]
+  }
+}
