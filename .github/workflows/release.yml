@@ -245,12 +245,11 @@ jobs:
           PY
 
       # The runner has glibc 2.35. The same tests, on the oldest glibc the
-      # add-on supports, with the model the step above downloaded.
+      # add-on supports.
       - name: Prove the archive on AlmaLinux 8 (glibc 2.28)
         if: matrix.platform_label == 'linux-x86_64'
         timeout-minutes: 30
         shell: bash
-        env:
         run: tools/test_archive.sh almalinux:8 "$ARCHIVE_NAME"
 
       - name: Assert the archive is complete
