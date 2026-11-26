@@ -27,7 +27,9 @@ that a GPU would not make a line noticeably faster.
 Linux builds run in the AlmaLinux 8 container (tools/build_native_linux.sh),
 so the libraries load on glibc 2.28. macOS builds are for Apple Silicon and
 macOS 13.3 or newer. Windows builds need Visual Studio's C++ tools, and link
-Microsoft's C runtime statically.
+Microsoft's C runtime statically. Haiku builds run on Haiku, against the
+system's libroot and libstdc++ (on every install), with the same libraries
+as on Linux.
 
     python tools/build_native.py [--jobs N]
 """
@@ -84,6 +86,9 @@ CMAKE_OPTIONS = [
 ]
 LINUX_OPTIONS = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DGGML_BACKEND_DL=ON', '-DGGML_CPU_ALL_VARIANTS=ON',
                  '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON', '-DCMAKE_INSTALL_RPATH=$ORIGIN']
+# Haiku: as Linux. Sockets are in libnetwork, which llama.cpp's CMake links
+# only into the server, not into libllama-common, whose downloader uses them.
+HAIKU_OPTIONS = [*LINUX_OPTIONS, '-DCMAKE_SHARED_LINKER_FLAGS=-lnetwork', '-DCMAKE_EXE_LINKER_FLAGS=-lnetwork']
 # Windows: one llama-server.exe with llama.cpp and ggml linked in. Built as
 # DLLs with the C runtime linked statically, each DLL would have its own heap,
 # and llama.cpp's libraries pass C++ strings and vectors between each other: the
@@ -100,7 +105,7 @@ MACOS_OPTIONS = ['-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_OSX_ARCHITECTURES=arm64'
                  '-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON', '-DCMAKE_INSTALL_RPATH=@loader_path']
 MACOS_MIN = (13, 3)
 
-SERVER = {'linux': 'llama-server', 'macos': 'llama-server', 'windows': 'llama-server.exe'}
+SERVER = {'linux': 'llama-server', 'macos': 'llama-server', 'windows': 'llama-server.exe', 'haiku': 'llama-server'}
 
 # Libraries every Linux desktop has; the build may link nothing else dynamically.
 LINUX_SYSTEM = {
@@ -109,6 +114,9 @@ LINUX_SYSTEM = {
 }
 # The newest symbol version each AlmaLinux 8 (glibc 2.28, GCC 8) library provides.
 LINUX_CEILINGS = {'GLIBC': (2, 28), 'GLIBCXX': (3, 4, 25), 'CXXABI': (1, 3, 11), 'GCC': (8, 0, 0)}
+# Haiku: libroot is its C library; libstdc++ and libgcc_s come with every
+# install (gcc_syslibs), and libnetwork holds the sockets.
+HAIKU_SYSTEM = {'libroot.so', 'libstdc++.so.6', 'libgcc_s.so.1', 'libnetwork.so', 'libbsd.so'}
 WINDOWS_SYSTEM = {'kernel32.dll', 'user32.dll', 'advapi32.dll', 'shell32.dll', 'ole32.dll', 'oleaut32.dll',
                   'ws2_32.dll', 'bcrypt.dll', 'ntdll.dll', 'shlwapi.dll', 'dbghelp.dll', 'psapi.dll',
                   'version.dll', 'winmm.dll', 'crypt32.dll', 'secur32.dll', 'userenv.dll', 'mswsock.dll'}
@@ -168,6 +176,12 @@ def checkout():
     run([*GIT, 'clean', '-q', '-fd'], cwd=SRC)
 
 
+def apply_patches(platform):
+    """tools/patches/<platform>/*.patch, in order: what llama.cpp needs to build there."""
+    for patch in sorted((ROOT / 'tools' / 'patches' / platform).glob('*.patch')):
+        run([*GIT, 'apply', '--verbose', patch], cwd=SRC)
+
+
 def fetch_models():
     """The pinned GGUF files, each checked against its sha256."""
     fresh(MODELS)
@@ -186,7 +200,8 @@ def fetch_models():
 
 def build(platform, jobs):
     configure = ['cmake', '-S', SRC, '-B', NATIVE_BUILD, *CMAKE_OPTIONS]
-    configure += {'linux': LINUX_OPTIONS, 'windows': WINDOWS_OPTIONS, 'macos': MACOS_OPTIONS}[platform]
+    configure += {'linux': LINUX_OPTIONS, 'windows': WINDOWS_OPTIONS, 'macos': MACOS_OPTIONS,
+                  'haiku': HAIKU_OPTIONS}[platform]
     run(configure)
     run(['cmake', '--build', NATIVE_BUILD, '--config', 'Release', '--parallel', str(jobs), '--target', 'llama-server'])
     found = [p for p in NATIVE_BUILD.rglob(SERVER[platform]) if p.is_file() and 'CMakeFiles' not in p.parts]
@@ -212,11 +227,11 @@ def collect(platform, built):
     fresh(RUNTIME)
     shutil.copyfile(built / SERVER[platform], RUNTIME / SERVER[platform])
     os.chmod(RUNTIME / SERVER[platform], 0o755)
-    pattern = {'linux': '*.so*', 'macos': '*.dylib', 'windows': '*.dll'}[platform]
+    pattern = {'linux': '*.so*', 'haiku': '*.so*', 'macos': '*.dylib', 'windows': '*.dll'}[platform]
     for lib in sorted(built.glob(pattern)):
         if lib.is_symlink():
             continue
-        name = {'linux': soname, 'macos': install_name}.get(platform, lambda path: path.name)(lib)
+        name = {'linux': soname, 'haiku': soname, 'macos': install_name}.get(platform, lambda path: path.name)(lib)
         shutil.copyfile(lib, RUNTIME / name)
 
 
@@ -260,6 +275,24 @@ def check_linux():
     if problems:
         sys.exit('not loadable on glibc 2.28 / GCC 8:\n  ' + '\n  '.join(sorted(set(problems))))
     print('llama-server and its libraries load on glibc 2.28 with the GCC 8 runtime, from one folder')
+
+
+# ---- Haiku: only the system's libraries, and each other from one folder ---
+
+def check_haiku():
+    files = sorted(p for p in RUNTIME.iterdir() if p.is_file())
+    shipped = {p.name for p in files}
+    problems = []
+    for lib in files:
+        problems += [f'{lib.name} needs {dep}, which is neither shipped nor a system library'
+                     for dep in needed(lib) if dep not in HAIKU_SYSTEM | shipped]
+        runpath = re.findall(r'\((?:RUNPATH|RPATH)\)\s+Library (?:runpath|rpath): \[([^\]]+)\]',
+                             output(['readelf', '-d', lib]))
+        if set(needed(lib)) & shipped and runpath != ['$ORIGIN']:
+            problems.append(f'{lib.name} has runpath {runpath}, not $ORIGIN')
+    if problems:
+        sys.exit('not loadable on Haiku:\n  ' + '\n  '.join(sorted(set(problems))))
+    print('llama-server and its libraries need only Haiku system libraries, and find each other in their own folder')
 
 
 # ---- macOS: refuse anything a Mac with macOS 13.3 couldn't load -----------
@@ -355,15 +388,17 @@ def collect_licences():
 
 
 def main():
-    host = {'linux': 'linux', 'win32': 'windows', 'darwin': 'macos'}[sys.platform]
+    host = 'haiku' if sys.platform.startswith('haiku') else {'linux': 'linux', 'win32': 'windows',
+                                                               'darwin': 'macos'}[sys.platform]
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--jobs', type=int, default=int(os.environ.get('JOBS', os.cpu_count() or 4)))
     args = parser.parse_args()
 
     checkout()
+    apply_patches(host)
     built = build(host, args.jobs)
     collect(host, built)
-    {'linux': check_linux, 'macos': check_macos, 'windows': check_windows}[host]()
+    {'linux': check_linux, 'macos': check_macos, 'windows': check_windows, 'haiku': check_haiku}[host]()
     collect_licences()
     fetch_models()
 

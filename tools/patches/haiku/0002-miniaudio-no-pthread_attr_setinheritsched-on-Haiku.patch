@@ -1,0 +1,14 @@
+Haiku has no pthread_attr_setinheritsched; the thread keeps the priority it
+inherits, as on Android before API 28.
+
+--- a/vendor/miniaudio/miniaudio.h
++++ b/vendor/miniaudio/miniaudio.h
+@@ -17734,7 +17734,7 @@
+ 
+                 /* I'm not treating a failure of setting the priority as a critical error so not aborting on failure here. */
+                 if (pthread_attr_setschedparam(&attr, &sched) == 0) {
+-                    #if !defined(MA_ANDROID) || (defined(__ANDROID_API__) && __ANDROID_API__ >= 28)
++                    #if (!defined(MA_ANDROID) || (defined(__ANDROID_API__) && __ANDROID_API__ >= 28)) && !defined(__HAIKU__)
+                     {
+                         pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+                     }

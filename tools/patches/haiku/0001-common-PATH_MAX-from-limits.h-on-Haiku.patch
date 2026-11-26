@@ -1,0 +1,13 @@
+Haiku has no sys/syslimits.h; PATH_MAX comes from limits.h, as on Linux.
+
+--- a/common/download.cpp
++++ b/common/download.cpp
+@@ -29,6 +29,8 @@
+ #   endif
+ #elif defined(_AIX)
+ #include <sys/limits.h>
++#elif defined(__HAIKU__)
++#include <limits.h>
+ #else
+ #include <sys/syslimits.h>
+ #endif
