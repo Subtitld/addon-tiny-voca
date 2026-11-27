@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "id": "tiny-voca",
-  "version": "26.11.1",
+  "version": "26.11.2",
   "display_name": "tiny-voca (offline, lightweight English)",
   "summary": "tiny-voca, a 4.5M-parameter model, speaks American English at 24 kHz in two voices, a woman and a man, dozens of times faster than real time on a CPU. Numbers, dates, times and money are read out as words. The model is part of the add-on: nothing to download. No voice cloning.",
   "author": "Subtitld",
